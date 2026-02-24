@@ -10,7 +10,7 @@
 
 AI Agent 每次启动都是一张白纸——不记得昨天做了什么决策、上周踩了什么坑、用户有什么偏好。这是所有长期运行 Agent 的核心痛点。
 
-这个项目提供了一套完整的解决方案：**两层文件架构 + 分层查找协议 + 知识自动沉淀流程**，纯 Markdown + JSON，零基础设施依赖，Git 友好，经过数月日常使用打磨。
+这个项目提供了一套完整的解决方案：**两层文件架构 + 分层查找协议 + 知识自动沉淀流程**。存储层是纯 Markdown + JSON（Git 友好，人类可读），检索层结合确定性查找和 embedding 语义搜索。经过数月日常使用打磨。
 
 ```
 MEMORY.md (热缓存, ~50 行)     <- 覆盖 90% 日常解码
@@ -73,11 +73,11 @@ AI Agent 记忆是 2025-2026 年的热门赛道。从 Mem0 到 Letta/MemGPT，�
 ```
 简单                                                              复杂
  |                                                                  |
- 单文件        文件分层        向量检索        知识图谱        混合架构
- CLAUDE.md     本项目         Mem0/LangMem    Zep/Graphiti    Letta/MemGPT
+ 单文件        文件分层+embedding     向量检索       知识图谱      混合架构
+ CLAUDE.md     本项目                Mem0/LangMem   Zep/Graphiti  Letta/MemGPT
 ```
 
-越往左，越简单、越可控、越便宜，但能力有限。越往右，能力越强，但复杂度、成本和锁定风险也越高。
+越往左，越简单、越可控，但能力有限。越往右，能力越强，但复杂度、成本和锁定风险也越高。我们的位置在中间偏左——存储是文件（简单、透明），检索用 embedding（不牺牲语义能力）。
 
 ### 逐一对比
 
@@ -94,8 +94,8 @@ Claude Code 的 CLAUDE.md 是最简单的记忆方案：一个 Markdown 文件�
 Mem0 是目前融资最多、最受关注的 Agent 记忆平台。它从对话中自动提取"记忆"，存入向量数据库 + 可选知识图谱，按用户/session/agent 三级组织。
 
 - 优势：自动提取，无需手动维护；语义检索能力强；有托管服务，开箱即用
-- 问题：黑盒提取（你不知道它提取了什么、遗漏了什么）；向量检索丢失文档结构（检索结果是碎片，不是有组织的知识）；依赖外部基础设施（向量数据库 + embedding API）；数据锁定在平台内；每次检索有成本（embed + rerank + LLM，约 $0.002-0.01/query）
-- 我们的差异：完全透明（每条记忆都是你能读的文件），结构化存储（不是碎片化的向量，而是按类型组织的目录），零运行成本（纯文件，不需要 embedding API），数据主权（本地文件 + Git，随时迁移）
+- 问题：黑盒提取（你不知道它提取了什么、遗漏了什么）；向量检索丢失文档结构（检索结果是碎片，不是有组织的知识）；依赖外部基础设施（向量数据库 + embedding API + rerank）；数据锁定在平台内；检索管线成本高（embed + rerank + LLM，约 $0.002-0.01/query）
+- 我们的差异：完全透明（每条记忆都是你能读的文件），结构化存储（不是碎片化的向量，而是按类型组织的目录）。我们也用 embedding 做语义搜索（路径 B），但关键区别是：Mem0 的存储和检索都依赖向量数据库，我们的存储是纯文件（人类可读、Git 可管理），embedding 只用于检索层。存储和检索解耦意味着即使 embedding 服务不可用，路径 A（确定性查找）仍然完全可用
 
 **Zep / Graphiti（时序知识图谱）**
 
@@ -125,15 +125,15 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 
 | 维度 | CLAUDE.md | Mem0 | Zep | Letta | 本项目 |
 |------|-----------|------|-----|-------|--------|
-| 基础设施需求 | 无 | 向量数据库 + embedding API | 图数据库 | Letta 服务 | 无（纯文件） |
-| 检索方式 | 全文扫描 | 语义检索 | 图查询 | 自主管理 | 确定性 + 语义双路径 |
-| 事实演变追踪 | 无（覆盖即丢失） | 有限 | 时序图谱 | 有限 | Supersede 链 |
-| 知识沉淀 | 手动 | 自动提取 | 自动提取 | Agent 自主 | 程序职员（自动提案 + 人工审核） |
-| 透明度 | 高（单文件） | 低（黑盒提取） | 中 | 中（ADE 可视化） | 高（所有文件可读） |
-| 数据主权 | 高 | 低（平台锁定） | 中 | 中 | 高（本地 + Git） |
-| 运行成本 | 零 | 每次检索付费 | 图数据库运维 | Letta 服务费 | 零 |
-| 可扩展性 | 差（文件膨胀） | 好 | 好 | 好 | 中（<500 文件最佳） |
-| 适用规模 | 小 | 中-大 | 中-大 | 中-大 | 小-中 |
+| 存储层 | 单文件 | 向量数据库 | 图数据库 | 自管理存储 | 纯文件（Markdown + JSON） |
+| 检索层 | 全文扫描 | embedding + rerank | 图查询 + BM25 | Agent 自主 | 确定性查找 + embedding 语义搜索 |
+| 基础设施 | 无 | 向量 DB + embedding API | 图 DB | Letta 服务 | embedding API（可选，路径 A 不依赖） |
+| 事实演变追踪 | 无（覆盖即丢失） | 有限 | 时序图谱 | 有限 | Supersede 链（JSON 平面文件） |
+| 知识沉淀 | 手动 | 自动提取（黑盒） | 自动提取 | Agent 自主 | 程序职员（自动提案 + 人工审核） |
+| 透明度 | 高（但不可管理） | 低（黑盒提取） | 中 | 中（ADE 可视化） | 高（所有文件可读可编辑） |
+| 数据主权 | 高 | 低（平台锁定） | 中 | 中 | 高（本地文件 + Git） |
+| 降级能力 | 无 | 无（向量 DB 不可用则全挂） | 无 | 有限 | 有（embedding 不可用时路径 A 仍工作） |
+| 适用规模 | 小 | 中-大 | 中-大 | 中-大 | 小-中（<500 实体最佳） |
 
 ### 我们的定位
 
@@ -144,8 +144,9 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 - 实体数量有限（几十到几百，不是几千）
 - 透明度和可控性比自动化更重要（你想知道 Agent 记住了什么）
 - 数据主权是硬需求（不想把记忆交给第三方平台）
-- 零运维成本是现实约束（不想为了记忆系统维护数据库）
+- 低运维成本是现实约束（不想为了记忆系统维护向量数据库或图数据库）
 - 知识沉淀需要人在回路（自动提取的质量不够，需要人工审核）
+- 需要降级能力（embedding 服务不可用时，确定性查找仍然能工作）
 
 在这个场景下，文件方案不是妥协，而是最优解。
 
@@ -161,10 +162,10 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 
 两条路径按场景选择：
 
-- 路径 A（确定性查找）：已知实体解码，从热缓存到术语表到档案目录，逐层查找，快且确定
-- 路径 B（语义搜索）：模糊回忆，"我们之前讨论过 X 吗"类问题，跨文件关联
+- 路径 A（确定性查找）：已知实体解码，从热缓存到术语表到档案目录，逐层查找，快且确定。不依赖任何外部服务。
+- 路径 B（语义搜索）：基于 embedding 的模糊回忆，"我们之前讨论过 X 吗"类问题，跨文件关联。措辞不同也能找到。
 
-简单查询走路径 A，复杂问题两条都走。确定性优先，语义搜索兜底。
+简单查询走路径 A，复杂问题两条都走。确定性优先，语义搜索兜底。这种分层设计的好处是：路径 A 覆盖了 90% 的日常场景且零外部依赖，路径 B 处理剩余 10% 的模糊查询。即使 embedding 服务暂时不可用，系统仍然能正常工作——只是丢失了模糊搜索能力，确定性查找不受影响。
 
 ### Supersede 机制
 
@@ -272,11 +273,11 @@ MIT
 
 A battle-tested memory system for AI agents that need to remember across sessions.
 
-Two-layer file-based architecture: a hot cache (MEMORY.md, ~50 lines) for instant context loading, and deep storage (memory/) for everything else. Plain Markdown + JSON, no database, fully Git-friendly.
+Two-layer file-based architecture: a hot cache (MEMORY.md, ~50 lines) for instant context loading, and deep storage (memory/) for everything else. Storage is plain Markdown + JSON (Git-friendly, human-readable). Retrieval combines deterministic lookup (Path A, zero external dependencies) with embedding-based semantic search (Path B).
 
 Key differentiators vs. existing solutions:
 - vs. CLAUDE.md (single file): Solves file bloat with two-layer separation, adds structured lookup protocol and fact evolution tracking
-- vs. Mem0 (vector DB): Fully transparent (every memory is a readable file), zero runtime cost, no platform lock-in
+- vs. Mem0 (vector DB): Storage and retrieval are decoupled -- storage is transparent files (not opaque vectors), embedding is only used for retrieval. Path A works without any external service
 - vs. Zep (knowledge graph): Supersede mechanism provides fact evolution tracking without graph database infrastructure
 - vs. Letta/MemGPT (virtual memory): Deterministic lookup over autonomous management -- predictability matters in production
 
