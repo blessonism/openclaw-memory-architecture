@@ -19,47 +19,42 @@ memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 
 ## 架构总览
 
-```
-                         ┌──────────────────────────────────────┐
-                         │          AI Agent (主 Session)        │
-                         │                                      │
-                         │  启动:                                │
-                         │    1. 加载 MEMORY.md (热缓存)         │
-                         │    2. 加载当日日志                     │
-                         │    3. 几秒内就绪                      │
-                         │                                      │
-                         │  工作中:                              │
-                         │    路径 A: 确定性查找 (已知实体)       │
-                         │    路径 B: 语义搜索 (模糊回忆)        │
-                         │                                      │
-                         │  结束:                                │
-                         │    写入每日日志                       │
-                         │    按需更新实体档案                   │
-                         │    热缓存自动晋升/降级                │
-                         └──────────┬──────────┬────────────────┘
-                                    │          │
-                    ┌───────────────┘          └───────────────┐
-                    v                                          v
-          ┌─────────────────┐                    ┌──────────────────────┐
-          │   MEMORY.md     │                    │      memory/         │
-          │   (热缓存)      │                    │    (深度存储)         │
-          │                 │                    │                      │
-          │  ~50 行表格     │  ── 晋升/降级 ──>  │  glossary.md  术语表  │
-          │  People 表      │                    │  people/     人物档案 │
-          │  Terms 表       │                    │  projects/   项目档案 │
-          │  Projects 表    │                    │  knowledge/  知识库   │
-          │  Preferences    │                    │  daily/      每日日志 │
-          │  Protocols      │                    │  context/    环境信息 │
-          └─────────────────┘                    │  post-mortems.md     │
-                                                 └──────────────────────┘
-                                                          |
-                                                          v
-                                                 ┌──────────────────┐
-                                                 │  程序职员 (审查)   │
-                                                 │  定期扫描日志      │
-                                                 │  提取知识 -> 提案  │
-                                                 │  人工审核 -> 落地  │
-                                                 └──────────────────┘
+```mermaid
+flowchart LR
+    subgraph Launch["启动"]
+        L1["1. 加载 MEMORY.md (热缓存)"]
+        L2["2. 加载当日日志"]
+        L3["3. 几秒内就绪"]
+    end
+
+    subgraph Work["工作中"]
+        W1["路径 A: 确定性查找 (已知实体)"]
+        W2["路径 B: 语义搜索 (模糊回忆)"]
+    end
+
+    subgraph Finish["结束"]
+        F1["写入每日日志"]
+        F2["按需更新实体档案"]
+        F3["热缓存自动晋升/降级"]
+    end
+
+    Agent["<b>AI Agent (主 Session)</b>"]
+
+    Hot["<b>MEMORY.md (热缓存)</b><br/><br/>~50 行表格<br/>People · Terms · Projects<br/>Preferences · Protocols"]
+
+    Deep["<b>memory/ (深度存储)</b><br/><br/>glossary.md · people/ · projects/<br/>knowledge/ · daily/ · context/<br/>post-mortems.md"]
+
+    Clerk["<b>程序职员 (审查)</b><br/><br/>定期扫描日志<br/>提取知识 → 提案<br/>人工审核 → 落地"]
+
+    Agent --- Launch
+    Agent --- Work
+    Agent --- Finish
+
+    Agent -->|读/写| Hot
+    Agent -->|读/写| Deep
+    Hot <-->|晋升/降级| Deep
+    Deep --> Clerk
+
 ```
 
 ## 与同类方案的深度对比
