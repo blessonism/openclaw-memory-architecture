@@ -64,13 +64,48 @@ flowchart LR
 
 ---
 
-## 与同类方案的深度对比
+## 与其他记忆方案的对比
 
-AI Agent 记忆是 2025-2026 年的热门赛道。从 Mem0 到 Letta/MemGPT，从 Zep 的时序知识图谱到 Claude Code 的 CLAUDE.md，方案很多。但它们解决的问题侧重点不同，适用场景也不同。
+### 在 OpenClaw 生态内的定位
 
-### 记忆方案光谱
+OpenClaw 默认提供了文件驱动的记忆基础设施：`MEMORY.md`（长期记忆）+ `memory/YYYY-MM-DD.md`（每日日志）+ `memory_search`/`memory_get` 工具（embedding 语义搜索）。这是一个优秀的起点，但它只提供了存储和检索的原语——如何组织记忆、如何查找信息、如何追踪事实变化、如何沉淀知识，这些上层问题留给了用户自己解决。
 
-当前的 Agent 记忆方案大致分布在一条光谱上：
+本项目是在 OpenClaw 记忆基础设施之上构建的**上层架构**，解决的是"有了工具之后怎么用好"的问题。
+
+| 维度 | OpenClaw 默认 | 本项目 |
+|------|-------------|--------|
+| 存储结构 | MEMORY.md + daily log，无进一步规范 | 按类型分目录（people/projects/knowledge/context），每类有明确 schema |
+| 检索方式 | memory_search（embedding）+ memory_get（精确读取） | 分层查找协议：路径 A 确定性查找（热缓存→术语表→档案）+ 路径 B 语义搜索，明确的场景路由规则 |
+| 事实追踪 | 无（覆盖即丢失） | Supersede 机制：JSON 原子事实链，旧事实标记替代而非删除 |
+| 知识沉淀 | 依赖 Agent 自觉写入 | 程序职员模式：独立审查进程扫描日志，自动提案，人工审核后落地 |
+| 热缓存管理 | MEMORY.md 无大小约束，容易膨胀 | 晋升/降级规则：高频条目晋升热缓存，低频条目降级深度存储，热缓存始终 ~50 行 |
+| 降级能力 | embedding 不可用时 memory_search 失效 | 路径 A 完全不依赖 embedding，覆盖 90% 日常场景 |
+
+### 与社区常见方案的对比
+
+OpenClaw 社区中，记忆方案大致分为三类：
+
+**方案一：单文件增强**
+
+最常见的做法——把所有重要信息塞进 MEMORY.md，不断追加。简单直接，但随着时间推移，文件膨胀、信息密度下降、查找效率降低。Claude Code 社区也有类似问题（CLAUDE.md 膨胀导致一个 "hi" 消息消耗 53K tokens）。
+
+本项目的两层分离 + 晋升/降级机制直接解决了这个问题：热缓存始终精简，深度存储按类型组织。
+
+**方案二：外部记忆平台集成（如 Mem0 for OpenClaw）**
+
+Mem0 等平台提供了 OpenClaw 集成，用向量数据库 + 知识图谱替代文件存储。优势是自动提取和语义检索能力强，但引入了外部依赖、黑盒提取（不知道提取了什么、遗漏了什么）、数据锁定在平台内。
+
+本项目选择了不同的路线：存储层保持纯文件（透明、可控、Git 友好），检索层复用 OpenClaw 内置的 embedding 能力。存储和检索解耦意味着即使 embedding 服务不可用，确定性查找仍然完全可用。在记忆这种核心资产上，透明度和可控性比自动化更重要。
+
+**方案三：纯日志流（只写 daily log，不做整理）**
+
+有些用户只依赖每日日志 + memory_search 的语义搜索。好处是零维护成本，但随着日志积累，搜索结果噪音增大，缺乏结构化的知识沉淀，同一个事实可能散落在几十个日志文件中。
+
+本项目的程序职员模式解决了"日志到知识"的转化问题：独立进程定期扫描日志，识别设计决策、可复用经验、实体变更，生成结构化提案，人工审核后写入对应的知识文件。
+
+### 更广泛的记忆方案光谱
+
+跳出 OpenClaw 生态，当前 AI Agent 记忆方案分布在一条光谱上：
 
 ```
 简单                                                              复杂
@@ -79,75 +114,31 @@ AI Agent 记忆是 2025-2026 年的热门赛道。从 Mem0 到 Letta/MemGPT，�
  CLAUDE.md     本项目                Mem0/LangMem   Zep/Graphiti  Letta/MemGPT
 ```
 
-越往左，越简单、越可控，但能力有限。越往右，能力越强，但复杂度、成本和锁定风险也越高。我们的位置在中间偏左——存储是文件（简单、透明），检索用 embedding（不牺牲语义能力）。
-
-### 逐一对比
-
-**CLAUDE.md / 单文件方案**
-
-Claude Code 的 CLAUDE.md 是最简单的记忆方案：一个 Markdown 文件，每次 session 加载。社区里很多人也用类似的单文件方案。
-
-- 优势：零配置，人人都能用
-- 问题：文件增长不可控（Claude Code 社区报告一个 "hi" 消息就消耗 53K tokens），没有查找协议（全靠 LLM 自己在长文本里找），没有事实演变追踪（覆盖即丢失），没有知识沉淀流程（全靠人手动维护）
-- 我们的差异：两层分离解决了增长问题（热缓存始终 ~50 行），分层查找协议解决了检索问题，Supersede 机制解决了事实追踪问题，程序职员模式解决了知识沉淀问题
-
-**Mem0**
-
-Mem0 是目前融资最多、最受关注的 Agent 记忆平台。它从对话中自动提取"记忆"，存入向量数据库 + 可选知识图谱，按用户/session/agent 三级组织。
-
-- 优势：自动提取，无需手动维护；语义检索能力强；有托管服务，开箱即用
-- 问题：黑盒提取（你不知道它提取了什么、遗漏了什么）；向量检索丢失文档结构（检索结果是碎片，不是有组织的知识）；依赖外部基础设施（向量数据库 + embedding API + rerank）；数据锁定在平台内；检索管线成本高（embed + rerank + LLM，约 $0.002-0.01/query）
-- 我们的差异：完全透明（每条记忆都是你能读的文件），结构化存储（不是碎片化的向量，而是按类型组织的目录）。我们也用 embedding 做语义搜索（路径 B），但关键区别是：Mem0 的存储和检索都依赖向量数据库，我们的存储是纯文件（人类可读、Git 可管理），embedding 只用于检索层。存储和检索解耦意味着即使 embedding 服务不可用，路径 A（确定性查找）仍然完全可用
-
-**Zep / Graphiti（时序知识图谱）**
-
-Zep 的核心创新是用知识图谱追踪事实的时间演变——不只是"用户喜欢咖啡"，而是"用户在周二讨论晨间习惯时提到喜欢某家店的咖啡"。
-
-- 优势：时间维度追踪，关系推理能力强，适合复杂的多实体场景
-- 问题：需要图数据库基础设施（Neo4j 等），schema 设计复杂，查询成本高，小规模场景 ROI 低
-- 我们的差异：Supersede 机制用 JSON 平面文件实现了事实演变追踪（不需要图数据库），items.json 的 supersede 链提供了完整的时间线，在 <500 实体的规模下比知识图谱更简单且够用
-
-**Letta / MemGPT（虚拟内存管理）**
-
-Letta 把操作系统的虚拟内存概念搬到了 Agent 上：core memory（常驻 context）+ archival memory（按需检索）+ recall memory（最近访问）。Agent 可以自己决定什么放进 context、什么存到外部。
-
-- 优势：Agent 自主管理记忆，理论上最灵活；有可视化开发环境（ADE）
-- 问题：Agent 自主管理 = 不可预测（你不知道它会把什么踢出 context），Letta 自己的 benchmark 显示纯文件系统在 LoCoMo 测试上得分 74%（已经很高），复杂的记忆基础设施只多了 26% 的提升
-- 我们的差异：我们选择了确定性而非自主性——查找协议是明确的规则（先查热缓存、再查术语表、再查档案），不是让 Agent 自己决定。可预测性在生产环境中比灵活性更重要。Letta 的 74% benchmark 也侧面验证了文件方案的可行性
-
-**LangMem / LangChain Memory**
-
-LangChain 生态的记忆模块，提供 ConversationBufferMemory、ConversationSummaryMemory 等多种策略。
-
-- 优势：与 LangChain 生态深度集成，策略可选
-- 问题：绑定 LangChain 框架，记忆策略是代码级的（不是文件级的，不可人工审查），没有跨框架可移植性
-- 我们的差异：平台无关（纯文件，任何能读写文件的 Agent 都能用），人类可读可审查（打开文件就能看到所有记忆），不绑定任何框架
-
-### 对比总结
+越往左，越简单、越可控，但能力有限。越往右，能力越强，但复杂度、成本和锁定风险也越高。本项目的位置在中间偏左——存储是文件（简单、透明），检索用 embedding（不牺牲语义能力）。
 
 | 维度 | CLAUDE.md | Mem0 | Zep | Letta | 本项目 |
 |------|-----------|------|-----|-------|--------|
 | 存储层 | 单文件 | 向量数据库 | 图数据库 | 自管理存储 | 纯文件（Markdown + JSON） |
 | 检索层 | 全文扫描 | embedding + rerank | 图查询 + BM25 | Agent 自主 | 确定性查找 + embedding 语义搜索 |
 | 基础设施 | 无 | 向量 DB + embedding API | 图 DB | Letta 服务 | embedding API（可选，路径 A 不依赖） |
-| 事实演变追踪 | 无（覆盖即丢失） | 有限 | 时序图谱 | 有限 | Supersede 链（JSON 平面文件） |
+| 事实演变追踪 | 无 | 有限 | 时序图谱 | 有限 | Supersede 链（JSON 平面文件） |
 | 知识沉淀 | 手动 | 自动提取（黑盒） | 自动提取 | Agent 自主 | 程序职员（自动提案 + 人工审核） |
-| 透明度 | 高（但不可管理） | 低（黑盒提取） | 中 | 中（ADE 可视化） | 高（所有文件可读可编辑） |
+| 透明度 | 高（但不可管理） | 低（黑盒提取） | 中 | 中 | 高（所有文件可读可编辑） |
 | 数据主权 | 高 | 低（平台锁定） | 中 | 中 | 高（本地文件 + Git） |
-| 降级能力 | 无 | 无（向量 DB 不可用则全挂） | 无 | 有限 | 有（embedding 不可用时路径 A 仍工作） |
+| 降级能力 | 无 | 无 | 无 | 有限 | 有（embedding 不可用时路径 A 仍工作） |
 | 适用规模 | 小 | 中-大 | 中-大 | 中-大 | 小-中（<500 实体最佳） |
 
-### 我们的定位
+### 适用场景
 
-这不是一个试图替代 Mem0 或 Zep 的方案。如果你的场景是：数千用户、海量交互历史、需要复杂的关系推理——你应该用专业的记忆平台。
+本项目不试图替代 Mem0 或 Zep。如果场景是数千用户、海量交互历史、复杂关系推理——应该用专业的记忆平台。
 
-我们解决的是另一个场景：**一个人（或一个小团队）和一个长期运行的 AI Agent 协作**。在这个场景下：
+本项目解决的是另一个场景：**一个人（或一个小团队）和一个长期运行的 AI Agent 协作**。在这个场景下：
 
 - 实体数量有限（几十到几百，不是几千）
-- 透明度和可控性比自动化更重要（你想知道 Agent 记住了什么）
-- 数据主权是硬需求（不想把记忆交给第三方平台）
-- 低运维成本是现实约束（不想为了记忆系统维护向量数据库或图数据库）
-- 知识沉淀需要人在回路（自动提取的质量不够，需要人工审核）
+- 透明度和可控性比自动化更重要
+- 数据主权是硬需求
+- 低运维成本是现实约束
+- 知识沉淀需要人在回路
 - 需要降级能力（embedding 服务不可用时，确定性查找仍然能工作）
 
 在这个场景下，文件方案不是妥协，而是最优解。
@@ -165,15 +156,15 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 两条路径按场景选择：
 
 - 路径 A（确定性查找）：已知实体解码，从热缓存到术语表到档案目录，逐层查找，快且确定。不依赖任何外部服务。
-- 路径 B（语义搜索）：基于 embedding 的模糊回忆，"我们之前讨论过 X 吗"类问题，跨文件关联。措辞不同也能找到。
+- 路径 B（语义搜索）：基于 embedding 的模糊回忆，"之前讨论过 X 吗"类问题，跨文件关联。措辞不同也能找到。
 
-简单查询走路径 A，复杂问题两条都走。确定性优先，语义搜索兜底。这种分层设计的好处是：路径 A 覆盖了 90% 的日常场景且零外部依赖，路径 B 处理剩余 10% 的模糊查询。即使 embedding 服务暂时不可用，系统仍然能正常工作——只是丢失了模糊搜索能力，确定性查找不受影响。
+简单查询走路径 A，复杂问题两条都走。确定性优先，语义搜索兜底。路径 A 覆盖 90% 的日常场景且零外部依赖，路径 B 处理剩余 10% 的模糊查询。即使 embedding 服务暂时不可用，系统仍然能正常工作。
 
 ### Supersede 机制
 
 事实会变。项目从"进行中"变成"已完成"，人员换了角色，配置更新了。直接覆盖旧值会丢失历史。
 
-我们的做法：每个实体（人物、项目）用 JSON 原子事实链追踪。新事实与旧事实矛盾时，旧事实标记为 `superseded` 并指向新事实。不删除任何记录，完整历史链可追溯。
+每个实体（人物、项目）用 JSON 原子事实链追踪。新事实与旧事实矛盾时，旧事实标记为 `superseded` 并指向新事实。不删除任何记录，完整历史链可追溯。
 
 ```json
 {
@@ -184,7 +175,7 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 }
 ```
 
-这是用平面文件实现的"穷人版时序知识图谱"——在小规模场景下，效果相当，复杂度低一个数量级。
+这是用平面文件实现的事实演变追踪——在小规模场景下，效果与时序知识图谱相当，复杂度低一个数量级。
 
 ### 程序职员模式
 
@@ -192,7 +183,7 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 
 主 Agent 在执行任务时不做任何"这个要不要记下来"的元认知判断——只管把每日日志写清楚。一个独立的审查进程（程序职员）定期扫描日志，自动识别设计决策、可复用经验、新术语、实体变更、重复模式，生成结构化提案。人工审核通过后才写入记忆。
 
-这跟 Mem0 的自动提取有本质区别：Mem0 是全自动的（提取了什么你不一定知道），我们是半自动的（自动发现，人工审核）。在记忆这种核心资产上，我们选择质量优先于便利。
+这跟 Mem0 的自动提取有本质区别：Mem0 是全自动的（提取了什么不一定知道），程序职员模式是半自动的（自动发现，人工审核）。在记忆这种核心资产上，质量优先于便利。
 
 ### 执行透明
 
@@ -241,14 +232,6 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 4. 将 AGENTS.md 中的查找协议加入 Agent 的 system prompt
 5. 可选：配置备份脚本和 token 追踪（需先编辑路径和 job ID）
 
-## 适用场景
-
-- 使用 OpenClaw、Claude Code、Codex 等平台运行长期 AI Agent
-- 一个人或小团队与 Agent 长期协作，实体规模在几十到几百
-- 需要 Agent 跨 session 记住用户偏好、项目状态、技术决策
-- 希望记忆系统透明可控，而非平台黑盒
-- 重视数据主权，不想被锁定在某个平台
-
 ## 设计哲学
 
 - 积淀大于新鲜感。各功能单独都有替代品，但集中沉淀才是质变。
@@ -266,3 +249,28 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 ## License
 
 MIT
+
+---
+
+<a id="english"></a>
+
+## English
+
+A battle-tested memory system for AI agents that need to remember across sessions.
+
+Two-layer file-based architecture: a hot cache (MEMORY.md, ~50 lines) for instant context loading, and deep storage (memory/) for everything else. Storage is plain Markdown + JSON (Git-friendly, human-readable). Retrieval combines deterministic lookup (Path A, zero external dependencies) with embedding-based semantic search (Path B).
+
+Built on top of OpenClaw's memory primitives (MEMORY.md + daily logs + memory_search), this project adds the upper-layer architecture: structured directory layout, tiered lookup protocol, supersede-based fact evolution tracking, clerk model for knowledge capture, and automatic promotion/demotion rules.
+
+Key differentiators:
+- vs. OpenClaw defaults: Adds structured organization, lookup protocol, fact tracking, and knowledge pipeline on top of the built-in primitives
+- vs. single-file approaches: Two-layer separation with promotion/demotion keeps the hot cache lean (~50 lines)
+- vs. Mem0/vector DB platforms: Storage and retrieval are decoupled -- transparent files for storage, embedding only for retrieval. Path A works without any external service
+- vs. Zep/knowledge graphs: Supersede mechanism provides fact evolution tracking via flat JSON files
+- vs. Letta/MemGPT: Deterministic lookup over autonomous management -- predictability matters in production
+
+Best suited for: individual or small-team long-running agents with <500 entities, where transparency, data sovereignty, and zero infrastructure are priorities.
+
+See [docs/00-getting-started.md](docs/00-getting-started.md) to get started. Browse `examples/` for fully populated sample files.
+
+Developed and validated on [OpenClaw](https://github.com/openclaw/openclaw), but the architecture is platform-agnostic.
