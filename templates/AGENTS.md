@@ -41,7 +41,9 @@ Before executing any request, decode all entities first.
 **Path B — Semantic Search (fuzzy recall)**
 ```
 1. semantic_search(query)        → Fuzzy match across all files
-2. read_context(path, lines)     → Pull full context from results
+                                   (OpenClaw: memory_search; alt: grep, embeddings)
+2. read_snippet(path, lines)     → Pull full context from results
+                                   (OpenClaw: memory_get; alt: cat, head/tail)
 3. Supplement with Path A        → Fill gaps
 ```
 

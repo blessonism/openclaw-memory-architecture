@@ -16,14 +16,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 
 // === Config (customize these) ===
 const SESSIONS_PATH = '/path/to/openclaw/agents/main/sessions/sessions.json';
-const CONFIG_PATH = '/path/to/openclaw/openclaw.json';
 const HISTORY_DIR = '/path/to/workspace/data/token-history';
-const CHAT_ID = '[your-chat-id]';
-const THREAD_ID = '[your-thread-id]';
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
@@ -120,9 +116,12 @@ function extractCronTokens(sessions, baselineSnapshot) {
 }
 
 function buildSnapshot(sessions, cronResult, baselineSnapshot) {
+  // Only mark runs as reported if they were actually counted.
+  // Skipped runs (null/invalid tokens) are NOT marked, so they can be
+  // re-evaluated on the next run when data may have become available.
   const reportedCronRuns = { ...(baselineSnapshot?.reportedCronRuns || {}) };
-  for (const key of Object.keys(sessions)) {
-    if (key.match(/^agent:main:cron:[^:]+:run:/)) {
+  for (const jobData of Object.values(cronResult.data)) {
+    for (const key of jobData.runKeys) {
       reportedCronRuns[key] = true;
     }
   }

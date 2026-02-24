@@ -23,7 +23,9 @@ For: recalling past events/decisions/discussions, "did we discuss X before" ques
 
 ```
 1. semantic_search(query)        → Fuzzy match, finds things even with different wording
-2. read_context(path, lines)     → Pull full context from search results
+                                   (OpenClaw: memory_search; alternatives: grep, embeddings)
+2. read_snippet(path, lines)     → Pull full context from search results
+                                   (OpenClaw: memory_get; alternatives: cat, head/tail)
 3. Supplement with Path A        → Search not enough? Fill gaps with deterministic lookup
 ```
 
@@ -56,8 +58,8 @@ Unknown terms get searched/verified before execution. Never execute blindly on u
 ## Implementation Notes
 
 The semantic search layer depends on your platform's capabilities:
-- OpenClaw provides `memory_search` (embedding-based) + `memory_get` (precise read)
-- Alternative: grep/ripgrep for simple text matching
-- Alternative: embedding database (overkill for <500 files)
+- OpenClaw: `memory_search` (embedding-based) + `memory_get` (precise read)
+- Claude Code / Codex: grep/ripgrep + file read
+- Custom: embedding database (overkill for <500 files)
 
 For most setups under 500 memory files, file-based search with good naming conventions is sufficient. The tiered lookup protocol works regardless of the search backend.

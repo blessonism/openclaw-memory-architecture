@@ -71,6 +71,7 @@ memory/ (deep storage, unlimited)     ← Covers the rest + full history
 .
 ├── README.md                          ← You are here
 ├── docs/
+│   ├── 00-getting-started.md          ← Setup guide (start here)
 │   ├── 01-core-architecture.md        ← Two-layer design + rationale
 │   ├── 02-memory-layout.md            ← File structure + schemas
 │   ├── 03-lookup-protocol.md          ← Tiered lookup (Path A + B)
@@ -85,6 +86,8 @@ memory/ (deep storage, unlimited)     ← Covers the rest + full history
 ├── templates/
 │   ├── MEMORY.md                      ← Hot cache template
 │   ├── AGENTS.md                      ← Agent behavior protocol
+│   ├── SOUL.md                        ← Agent personality template
+│   ├── USER.md                        ← User profile template
 │   ├── items.json                     ← Entity fact tracking schema
 │   ├── daily-log.md                   ← Daily log template
 │   ├── knowledge-file.md             ← Knowledge file template
@@ -107,11 +110,14 @@ memory/ (deep storage, unlimited)     ← Covers the rest + full history
 
 ## Quick Start
 
-1. Copy `templates/` into your OpenClaw workspace
-2. Rename and customize `MEMORY.md` with your entities
-3. Set up `memory/` directory structure
-4. Add the lookup protocol to your agent's system prompt (see `templates/AGENTS.md`)
-5. Optionally set up cron jobs for automated review and backup
+See [`docs/00-getting-started.md`](docs/00-getting-started.md) for the full setup guide. The short version:
+
+1. Copy `templates/` into your workspace, move core files (`MEMORY.md`, `AGENTS.md`, `SOUL.md`, `USER.md`) to root
+2. Create `memory/` directory structure: `daily/`, `people/`, `projects/`, `knowledge/`, `context/`
+3. Customize `SOUL.md` (agent personality), `USER.md` (user profile), `MEMORY.md` (initial entities)
+4. Add the lookup protocol from `AGENTS.md` to your agent's system prompt
+5. Optionally: configure `scripts/auto-backup.sh` and `scripts/token-tracker.js` (edit paths + job IDs first)
+6. Browse `examples/` for fully populated sample files
 
 ## Design Philosophy
 

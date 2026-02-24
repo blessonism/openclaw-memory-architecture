@@ -8,13 +8,15 @@ Everything lives in files. Files go into git. Git pushes to GitHub. Simple.
 
 ```
 Daily Backup Flow:
-  1. git add -A (respect .gitignore)
-  2. Run token-tracker (compute daily usage)
+  1. Run token-tracker (compute daily usage)
+  2. git add -A (respect .gitignore, includes tracker output)
   3. Check diff — skip if no changes
-  4. Generate AI change summary (lightweight model)
+  4. Prepend AI change summary if provided (via BACKUP_SUMMARY env var)
   5. Commit with structured message
   6. Push to GitHub
 ```
+
+Note: The backup script itself does not generate AI summaries. Your cron job or wrapper script is responsible for generating the summary (e.g., using an LLM to describe the diff) and passing it via the `BACKUP_SUMMARY` environment variable.
 
 ## Commit Format
 

@@ -42,14 +42,14 @@ if [ ! -d .git ]; then
   exit 3
 fi
 
-# Stage all changes
-git add -A
-
-# Run token tracker BEFORE exit check (runs even if no git changes)
+# Run token tracker BEFORE staging (so its output gets included)
 if [ -f "${TRACKER}" ]; then
   echo "$(timestamp) Running token-tracker..." >> "${LOG_FILE}"
   node "${TRACKER}" >> "${LOG_FILE}" 2>&1 || echo "$(timestamp) WARN: token-tracker failed" >> "${LOG_FILE}"
 fi
+
+# Stage all changes (including token-tracker output)
+git add -A
 
 # Exit quietly if no changes
 if git diff --cached --quiet; then
@@ -71,9 +71,9 @@ for dir in workspace/data/exec-logs workspace/memory workspace/skills workspace/
   fi
 done
 
-OTHER=$(git diff --cached --name-only | grep -v -E '^(workspace/data/exec-logs|workspace/memory|workspace/skills|workspace/data|config)/' | wc -l)
+OTHER=$(git diff --cached --name-only | grep -v -E '^(workspace/data/exec-logs|workspace/memory|workspace/skills|workspace/data|config)/' | wc -l || true)
 if [ "$OTHER" -gt 0 ]; then
-  OTHER_FILES=$(git diff --cached --name-only | grep -v -E '^(workspace/data/exec-logs|workspace/memory|workspace/skills|workspace/data|config)/' | sed 's|.*/||' | head -5 | paste -sd ', ' -)
+  OTHER_FILES=$(git diff --cached --name-only | grep -v -E '^(workspace/data/exec-logs|workspace/memory|workspace/skills|workspace/data|config)/' | sed 's|.*/||' | head -5 | paste -sd ', ' - || true)
   [ "$OTHER" -gt 5 ] && OTHER_FILES="${OTHER_FILES}, ..."
   BODY="${BODY}other (${OTHER}): ${OTHER_FILES}\n"
 fi
@@ -81,7 +81,8 @@ fi
 BODY="${BODY}\n${STAT_SUMMARY}"
 
 # Prepend AI-generated summary if provided via env var
-# Your cron job can set BACKUP_SUMMARY before calling this script
+# Your cron job or wrapper script generates the summary and sets this variable
+# before calling auto-backup.sh. The script itself does NOT generate summaries.
 if [ -n "${BACKUP_SUMMARY:-}" ]; then
   BODY="${BACKUP_SUMMARY}\n\n---\n${BODY}"
 fi
