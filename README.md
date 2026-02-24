@@ -240,26 +240,24 @@ Mem0 等平台提供了 OpenClaw 集成，用向量数据库 + 知识图谱替�
 
 ### 养分来源
 
-**Anthropic `knowledge-work-plugins`** — 架构起点。这个项目的 `memory-management` skill 提出了两层记忆 + 分层查找链 + 晋升/降级的核心思想。当时的判断是"代码价值不高（全 Markdown），设计思想价值极高"。本项目的双层架构、分层查找协议、晋升/降级规则直接源于此。
+**Anthropic `knowledge-work-plugins`** — 架构起点。该项目的 `memory-management` skill 提出了两层记忆 + 分层查找链 + 晋升/降级的核心思想。当时的判断是"代码价值不高（全 Markdown），设计思想价值极高"。本项目的双层架构、分层查找协议、晋升/降级规则直接源于此。
 
 **saramiwa 三层记忆系统**（BotLearn 社区）— Supersede 机制的直接来源。saramiwa 的帖子《How I Built a Three-Layer Memory System That Actually Remembers》提出了 JSON 原子事实追踪 + supersede 链 + 实体摘要自动重写的模式。评估后引入了 Supersede 机制和目录结构（summary.md + items.json），但判断 qmd 混合检索（BM25+向量+reranking）和微同步（每 30min 廉价模型扫描对话提取事实）在当前规模下 ROI 不高，列为未来候选。
 
 **Felix "Project Accountability"**（BotLearn 社区）— 子 Agent 协作模式的来源。Felix 提出的 Chain of Custody（监管链）和 Context Slicing（精确上下文切片）模式，直接影响了本项目中 Dispatcher 协议和子 Agent 验收清单的设计。同时参考了 Skywork Mission Control 的并发实测数据（并发 >4 时错误率从 1.8% 升至 4.6%）。
 
-**Brooks《人月神话》** — 程序职员模式的概念原型。外科手术队伍中"程序职员"负责记录和整理所有文档，主程序员专注编码。这个角色分离的思想被应用到知识沉淀流程：主 Agent 专注任务执行，独立审查进程负责从日志中发现和提炼知识。
+**Brooks《人月神话》** — 程序职员模式的概念原型。外科手术队伍中"程序职员"负责记录和整理所有文档，主程序员专注编码。该角色分离的思想被应用到知识沉淀流程：主 Agent 专注任务执行，独立审查进程负责从日志中发现和提炼知识。
 
 ### 评估过但未引入的方案
 
-| 方案 | 来源 | 判断 | 触发条件 |
+| 方案 | 来源 | 判断 | 什么时候需要 |
 |------|------|------|---------|
 | qmd 混合检索（BM25+向量+reranking） | saramiwa / tobi/qmd / openclaw-engram | Hold | 文件量 >500 或 search-miss >=3 次 |
 | 微同步（每 30min 廉价模型扫描对话提取事实） | saramiwa 三层记忆 | Hold | 重要信息被 compaction 吞掉 >=2 次 |
-| Capability Evolver（自动能力进化） | OpenClaw 社区 skill | Hold（与程序职员模式冲突） | — |
+| Capability Evolver（自动能力进化） | OpenClaw 社区 skill | Hold（与程序职员模式类似） | — |
 | GitHub Issues 作为 Agent 状态机 | Felix / BotLearn | Hold | 任务规模达到 15-20 个 |
 
-每个"Hold"都有明确的触发条件——不是永远不做，而是当前规模下 ROI 不够。
-
-虽然在 OpenClaw 上开发和验证，但架构本身是平台无关的——核心是 Markdown 文件 + 查找协议 + 知识沉淀流程，可以适配任何支持文件读写的 Agent 平台。
+虽然本记忆架构是在 OpenClaw 上开发和验证，但架构和流程本身是平台无关的，可以适配任何支持文件读写的 Agent 平台。
 
 ## License
 
