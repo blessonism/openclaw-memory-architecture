@@ -20,6 +20,8 @@ memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 ## 架构总览
 ![pipline](https://github.com/user-attachments/assets/6e750706-0796-4db6-a5f1-4072ce6c44b5)
 
+<details>
+    <summary>主要流程</summary>
 
 ```mermaid
 flowchart LR
@@ -58,6 +60,9 @@ flowchart LR
     Deep --> Clerk
 
 ```
+</details>
+
+---
 
 ## 与同类方案的深度对比
 
@@ -261,25 +266,3 @@ LangChain 生态的记忆模块，提供 ConversationBufferMemory、Conversation
 ## License
 
 MIT
-
----
-
-<a id="english"></a>
-
-## English
-
-A battle-tested memory system for AI agents that need to remember across sessions.
-
-Two-layer file-based architecture: a hot cache (MEMORY.md, ~50 lines) for instant context loading, and deep storage (memory/) for everything else. Storage is plain Markdown + JSON (Git-friendly, human-readable). Retrieval combines deterministic lookup (Path A, zero external dependencies) with embedding-based semantic search (Path B).
-
-Key differentiators vs. existing solutions:
-- vs. CLAUDE.md (single file): Solves file bloat with two-layer separation, adds structured lookup protocol and fact evolution tracking
-- vs. Mem0 (vector DB): Storage and retrieval are decoupled -- storage is transparent files (not opaque vectors), embedding is only used for retrieval. Path A works without any external service
-- vs. Zep (knowledge graph): Supersede mechanism provides fact evolution tracking without graph database infrastructure
-- vs. Letta/MemGPT (virtual memory): Deterministic lookup over autonomous management -- predictability matters in production
-
-Best suited for: individual or small-team long-running agents with <500 entities, where transparency, data sovereignty, and zero infrastructure are priorities.
-
-See [docs/00-getting-started.md](docs/00-getting-started.md) to get started. Browse `examples/` for fully populated sample files.
-
-Developed and validated on [OpenClaw](https://github.com/openclaw/openclaw), but the architecture is platform-agnostic.
