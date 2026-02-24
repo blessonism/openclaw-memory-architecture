@@ -1,0 +1,15 @@
+{
+  "entity": "[entity-name]",
+  "type": "person | project",
+  "items": [
+    {
+      "id": "[entity]-001",
+      "fact": "One atomic fact — cannot be split further",
+      "category": "identity | status | relationship | milestone | preference | decision | config",
+      "timestamp": "YYYY-MM-DD",
+      "source": "conversation:[session-key] | log:[date] | cron:[job] | migration:[file]",
+      "status": "active | superseded | historical",
+      "supersededBy": null
+    }
+  ]
+}

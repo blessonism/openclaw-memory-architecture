@@ -1,0 +1,42 @@
+{
+  "entity": "my-project",
+  "type": "project",
+  "items": [
+    {
+      "id": "my-project-001",
+      "fact": "Multi-source search aggregation tool",
+      "category": "identity",
+      "timestamp": "2025-06-01",
+      "source": "log:2025-06-01",
+      "status": "active",
+      "supersededBy": null
+    },
+    {
+      "id": "my-project-002",
+      "fact": "Phase 1: single source (Brave only)",
+      "category": "milestone",
+      "timestamp": "2025-06-15",
+      "source": "log:2025-06-15",
+      "status": "historical",
+      "supersededBy": null
+    },
+    {
+      "id": "my-project-003",
+      "fact": "Phase 2: added Exa + Tavily, deduplication, scoring",
+      "category": "milestone",
+      "timestamp": "2025-08-01",
+      "source": "log:2025-08-01",
+      "status": "active",
+      "supersededBy": null
+    },
+    {
+      "id": "my-project-004",
+      "fact": "Status: completed, v2 stable",
+      "category": "status",
+      "timestamp": "2025-09-15",
+      "source": "log:2025-09-15",
+      "status": "active",
+      "supersededBy": null
+    }
+  ]
+}

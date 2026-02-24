@@ -1,0 +1,42 @@
+{
+  "entity": "alice",
+  "type": "person",
+  "items": [
+    {
+      "id": "alice-001",
+      "fact": "Frontend engineer, joined the team in 2025",
+      "category": "identity",
+      "timestamp": "2025-06-15",
+      "source": "conversation:session-abc123",
+      "status": "active",
+      "supersededBy": null
+    },
+    {
+      "id": "alice-002",
+      "fact": "Working on Project Alpha as developer",
+      "category": "status",
+      "timestamp": "2025-07-01",
+      "source": "log:2025-07-01",
+      "status": "superseded",
+      "supersededBy": "alice-004"
+    },
+    {
+      "id": "alice-003",
+      "fact": "Prefers async communication over meetings",
+      "category": "preference",
+      "timestamp": "2025-07-10",
+      "source": "conversation:session-def456",
+      "status": "active",
+      "supersededBy": null
+    },
+    {
+      "id": "alice-004",
+      "fact": "Promoted to tech lead on Project Beta",
+      "category": "status",
+      "timestamp": "2025-09-01",
+      "source": "log:2025-09-01",
+      "status": "active",
+      "supersededBy": null
+    }
+  ]
+}
