@@ -18,6 +18,8 @@ memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 ```
 
 ## 架构总览
+![pipline](https://github.com/user-attachments/assets/6e750706-0796-4db6-a5f1-4072ce6c44b5)
+
 
 ```mermaid
 flowchart LR
