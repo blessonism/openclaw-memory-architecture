@@ -10,35 +10,144 @@
 
 AI Agent 每次启动都是一张白纸——不记得昨天做了什么决策、上周踩了什么坑、用户有什么偏好。这是所有长期运行 Agent 的核心痛点。
 
-现有的"记忆"方案要么太简单（一个无限增长的文件，越来越慢），要么太重（向量数据库，丢失上下文结构，运维成本高）。
-
-这个项目提供了一个中间路线：**两层文件架构**，纯 Markdown + JSON，零基础设施依赖，Git 友好，经过数月日常使用打磨。
+这个项目提供了一套完整的解决方案：**两层文件架构 + 分层查找协议 + 知识自动沉淀流程**，纯 Markdown + JSON，零基础设施依赖，Git 友好，经过数月日常使用打磨。
 
 ```
 MEMORY.md (热缓存, ~50 行)     <- 覆盖 90% 日常解码
 memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 ```
 
-## 为什么不用现有方案
+## 架构总览
 
-| 方案 | 问题 |
-|------|------|
-| 单文件记忆 (MEMORY.md only) | 文件越来越大，加载慢，信息密度下降，找东西靠运气 |
-| 向量数据库 (Pinecone, Chroma) | 丢失文档结构，检索结果碎片化，需要额外基础设施，迁移困难 |
-| 对话历史直接塞 context | token 成本爆炸，compaction 丢信息，无法跨 session |
-| 平台内置记忆 (ChatGPT Memory) | 黑盒，不可控，不可迁移，容量有限 |
+```
+                         ┌──────────────────────────────────────┐
+                         │          AI Agent (主 Session)        │
+                         │                                      │
+                         │  启动:                                │
+                         │    1. 加载 MEMORY.md (热缓存)         │
+                         │    2. 加载当日日志                     │
+                         │    3. 几秒内就绪                      │
+                         │                                      │
+                         │  工作中:                              │
+                         │    路径 A: 确定性查找 (已知实体)       │
+                         │    路径 B: 语义搜索 (模糊回忆)        │
+                         │                                      │
+                         │  结束:                                │
+                         │    写入每日日志                       │
+                         │    按需更新实体档案                   │
+                         │    热缓存自动晋升/降级                │
+                         └──────────┬──────────┬────────────────┘
+                                    │          │
+                    ┌───────────────┘          └───────────────┐
+                    v                                          v
+          ┌─────────────────┐                    ┌──────────────────────┐
+          │   MEMORY.md     │                    │      memory/         │
+          │   (热缓存)      │                    │    (深度存储)         │
+          │                 │                    │                      │
+          │  ~50 行表格     │  ── 晋升/降级 ──>  │  glossary.md  术语表  │
+          │  People 表      │                    │  people/     人物档案 │
+          │  Terms 表       │                    │  projects/   项目档案 │
+          │  Projects 表    │                    │  knowledge/  知识库   │
+          │  Preferences    │                    │  daily/      每日日志 │
+          │  Protocols      │                    │  context/    环境信息 │
+          └─────────────────┘                    │  post-mortems.md     │
+                                                 └──────────────────────┘
+                                                          |
+                                                          v
+                                                 ┌──────────────────┐
+                                                 │  程序职员 (审查)   │
+                                                 │  定期扫描日志      │
+                                                 │  提取知识 -> 提案  │
+                                                 │  人工审核 -> 落地  │
+                                                 └──────────────────┘
+```
 
-我们的方案：
+## 与同类方案的深度对比
 
-| 特性 | 实现 |
-|------|------|
-| 快速启动 | 热缓存 ~50 行，表格格式，一眼扫完 |
-| 深度检索 | 按类型分目录，确定性查找 + 语义搜索双路径 |
-| 事实演变追踪 | Supersede 机制：旧事实标记替代，不删除，保留完整历史链 |
-| 知识自动沉淀 | 程序职员模式：独立进程扫描日志，提取知识，人工审核后落地 |
-| 零基础设施 | 纯文件，Markdown + JSON，不需要数据库 |
-| 完全可控 | 本地文件，Git 备份，随时迁移，不锁定任何平台 |
-| 执行透明 | 每个自动化任务产出可追溯的执行日志 |
+AI Agent 记忆是 2025-2026 年的热门赛道。从 Mem0 到 Letta/MemGPT，从 Zep 的时序知识图谱到 Claude Code 的 CLAUDE.md，方案很多。但它们解决的问题侧重点不同，适用场景也不同。
+
+### 记忆方案光谱
+
+当前的 Agent 记忆方案大致分布在一条光谱上：
+
+```
+简单                                                              复杂
+ |                                                                  |
+ 单文件        文件分层        向量检索        知识图谱        混合架构
+ CLAUDE.md     本项目         Mem0/LangMem    Zep/Graphiti    Letta/MemGPT
+```
+
+越往左，越简单、越可控、越便宜，但能力有限。越往右，能力越强，但复杂度、成本和锁定风险也越高。
+
+### 逐一对比
+
+**CLAUDE.md / 单文件方案**
+
+Claude Code 的 CLAUDE.md 是最简单的记忆方案：一个 Markdown 文件，每次 session 加载。社区里很多人也用类似的单文件方案。
+
+- 优势：零配置，人人都能用
+- 问题：文件增长不可控（Claude Code 社区报告一个 "hi" 消息就消耗 53K tokens），没有查找协议（全靠 LLM 自己在长文本里找），没有事实演变追踪（覆盖即丢失），没有知识沉淀流程（全靠人手动维护）
+- 我们的差异：两层分离解决了增长问题（热缓存始终 ~50 行），分层查找协议解决了检索问题，Supersede 机制解决了事实追踪问题，程序职员模式解决了知识沉淀问题
+
+**Mem0**
+
+Mem0 是目前融资最多、最受关注的 Agent 记忆平台。它从对话中自动提取"记忆"，存入向量数据库 + 可选知识图谱，按用户/session/agent 三级组织。
+
+- 优势：自动提取，无需手动维护；语义检索能力强；有托管服务，开箱即用
+- 问题：黑盒提取（你不知道它提取了什么、遗漏了什么）；向量检索丢失文档结构（检索结果是碎片，不是有组织的知识）；依赖外部基础设施（向量数据库 + embedding API）；数据锁定在平台内；每次检索有成本（embed + rerank + LLM，约 $0.002-0.01/query）
+- 我们的差异：完全透明（每条记忆都是你能读的文件），结构化存储（不是碎片化的向量，而是按类型组织的目录），零运行成本（纯文件，不需要 embedding API），数据主权（本地文件 + Git，随时迁移）
+
+**Zep / Graphiti（时序知识图谱）**
+
+Zep 的核心创新是用知识图谱追踪事实的时间演变——不只是"用户喜欢咖啡"，而是"用户在周二讨论晨间习惯时提到喜欢某家店的咖啡"。
+
+- 优势：时间维度追踪，关系推理能力强，适合复杂的多实体场景
+- 问题：需要图数据库基础设施（Neo4j 等），schema 设计复杂，查询成本高，小规模场景 ROI 低
+- 我们的差异：Supersede 机制用 JSON 平面文件实现了事实演变追踪（不需要图数据库），items.json 的 supersede 链提供了完整的时间线，在 <500 实体的规模下比知识图谱更简单且够用
+
+**Letta / MemGPT（虚拟内存管理）**
+
+Letta 把操作系统的虚拟内存概念搬到了 Agent 上：core memory（常驻 context）+ archival memory（按需检索）+ recall memory（最近访问）。Agent 可以自己决定什么放进 context、什么存到外部。
+
+- 优势：Agent 自主管理记忆，理论上最灵活；有可视化开发环境（ADE）
+- 问题：Agent 自主管理 = 不可预测（你不知道它会把什么踢出 context），Letta 自己的 benchmark 显示纯文件系统在 LoCoMo 测试上得分 74%（已经很高），复杂的记忆基础设施只多了 26% 的提升
+- 我们的差异：我们选择了确定性而非自主性——查找协议是明确的规则（先查热缓存、再查术语表、再查档案），不是让 Agent 自己决定。可预测性在生产环境中比灵活性更重要。Letta 的 74% benchmark 也侧面验证了文件方案的可行性
+
+**LangMem / LangChain Memory**
+
+LangChain 生态的记忆模块，提供 ConversationBufferMemory、ConversationSummaryMemory 等多种策略。
+
+- 优势：与 LangChain 生态深度集成，策略可选
+- 问题：绑定 LangChain 框架，记忆策略是代码级的（不是文件级的，不可人工审查），没有跨框架可移植性
+- 我们的差异：平台无关（纯文件，任何能读写文件的 Agent 都能用），人类可读可审查（打开文件就能看到所有记忆），不绑定任何框架
+
+### 对比总结
+
+| 维度 | CLAUDE.md | Mem0 | Zep | Letta | 本项目 |
+|------|-----------|------|-----|-------|--------|
+| 基础设施需求 | 无 | 向量数据库 + embedding API | 图数据库 | Letta 服务 | 无（纯文件） |
+| 检索方式 | 全文扫描 | 语义检索 | 图查询 | 自主管理 | 确定性 + 语义双路径 |
+| 事实演变追踪 | 无（覆盖即丢失） | 有限 | 时序图谱 | 有限 | Supersede 链 |
+| 知识沉淀 | 手动 | 自动提取 | 自动提取 | Agent 自主 | 程序职员（自动提案 + 人工审核） |
+| 透明度 | 高（单文件） | 低（黑盒提取） | 中 | 中（ADE 可视化） | 高（所有文件可读） |
+| 数据主权 | 高 | 低（平台锁定） | 中 | 中 | 高（本地 + Git） |
+| 运行成本 | 零 | 每次检索付费 | 图数据库运维 | Letta 服务费 | 零 |
+| 可扩展性 | 差（文件膨胀） | 好 | 好 | 好 | 中（<500 文件最佳） |
+| 适用规模 | 小 | 中-大 | 中-大 | 中-大 | 小-中 |
+
+### 我们的定位
+
+这不是一个试图替代 Mem0 或 Zep 的方案。如果你的场景是：数千用户、海量交互历史、需要复杂的关系推理——你应该用专业的记忆平台。
+
+我们解决的是另一个场景：**一个人（或一个小团队）和一个长期运行的 AI Agent 协作**。在这个场景下：
+
+- 实体数量有限（几十到几百，不是几千）
+- 透明度和可控性比自动化更重要（你想知道 Agent 记住了什么）
+- 数据主权是硬需求（不想把记忆交给第三方平台）
+- 零运维成本是现实约束（不想为了记忆系统维护数据库）
+- 知识沉淀需要人在回路（自动提取的质量不够，需要人工审核）
+
+在这个场景下，文件方案不是妥协，而是最优解。
 
 ## 核心设计
 
@@ -55,7 +164,7 @@ memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 - 路径 A（确定性查找）：已知实体解码，从热缓存到术语表到档案目录，逐层查找，快且确定
 - 路径 B（语义搜索）：模糊回忆，"我们之前讨论过 X 吗"类问题，跨文件关联
 
-简单查询走路径 A，复杂问题两条都走。
+简单查询走路径 A，复杂问题两条都走。确定性优先，语义搜索兜底。
 
 ### Supersede 机制
 
@@ -72,13 +181,15 @@ memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 }
 ```
 
+这是用平面文件实现的"穷人版时序知识图谱"——在小规模场景下，效果相当，复杂度低一个数量级。
+
 ### 程序职员模式
 
 灵感来自 Brooks《人月神话》中的程序职员角色。
 
 主 Agent 在执行任务时不做任何"这个要不要记下来"的元认知判断——只管把每日日志写清楚。一个独立的审查进程（程序职员）定期扫描日志，自动识别设计决策、可复用经验、新术语、实体变更、重复模式，生成结构化提案。人工审核通过后才写入记忆。
 
-好处：主 Agent 零额外负担，知识沉淀不依赖"记得要标记"，审查质量由独立进程保证。
+这跟 Mem0 的自动提取有本质区别：Mem0 是全自动的（提取了什么你不一定知道），我们是半自动的（自动发现，人工审核）。在记忆这种核心资产上，我们选择质量优先于便利。
 
 ### 执行透明
 
@@ -92,41 +203,29 @@ memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 .
 ├── README.md                          <- 本文件
 ├── docs/
-│   ├── 00-getting-started.md          <- 上手指南
-│   ├── 01-core-architecture.md        <- 两层架构设计
+│   ├── 00-getting-started.md          <- 上手指南（从这里开始）
+│   ├── 01-core-architecture.md        <- 两层架构设计与理由
 │   ├── 02-memory-layout.md            <- 文件结构与 schema
 │   ├── 03-lookup-protocol.md          <- 分层查找协议
-│   ├── 04-entity-tracking.md          <- Supersede 机制
+│   ├── 04-entity-tracking.md          <- Supersede 机制详解
 │   ├── 05-knowledge-pipeline.md       <- 程序职员模式
-│   ├── 06-cron-automation.md          <- 定时任务与投递
+│   ├── 06-cron-automation.md          <- 定时任务与投递最佳实践
 │   ├── 07-execution-transparency.md   <- 执行日志与仪表盘
 │   ├── 08-backup-system.md            <- Git 备份体系
 │   ├── 09-task-management.md          <- 任务管理集成
 │   ├── 10-post-mortems.md             <- 从失败中学习
 │   └── 11-data-flow.md               <- 数据流全景
 ├── templates/                         <- 可直接使用的模板
-│   ├── MEMORY.md                      <- 热缓存模板
-│   ├── AGENTS.md                      <- Agent 行为协议
-│   ├── SOUL.md                        <- Agent 人格模板
-│   ├── USER.md                        <- 用户画像模板
+│   ├── MEMORY.md, AGENTS.md, SOUL.md, USER.md
 │   ├── items.json                     <- 实体事实追踪 schema
-│   ├── daily-log.md                   <- 每日日志模板
-│   ├── knowledge-file.md              <- 知识文件模板
-│   ├── post-mortems.md                <- 经验教训模板
+│   ├── daily-log.md, knowledge-file.md, post-mortems.md
 │   └── cron-prompt.md                 <- 定时任务 prompt 模板
 ├── scripts/                           <- 辅助脚本（脱敏版）
-│   ├── token-tracker.js               <- Token 用量追踪（零 LLM）
+│   ├── token-tracker.js               <- Token 用量追踪（零 LLM 开销）
 │   └── auto-backup.sh                 <- Git 全量备份
 └── examples/                          <- 完整示例（脱敏数据）
-    ├── MEMORY.md
-    └── memory/
-        ├── glossary.md
-        ├── daily/
-        ├── people/
-        ├── projects/
-        ├── knowledge/
-        ├── context/
-        └── post-mortems.md
+    ├── MEMORY.md                      <- 填充好的热缓存示例
+    └── memory/                        <- 完整目录结构示例
 ```
 
 ## 快速开始
@@ -135,14 +234,14 @@ memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 
 1. 复制 `templates/` 到你的工作区，将核心文件（MEMORY.md、AGENTS.md、SOUL.md、USER.md）移到根目录
 2. 创建 `memory/` 目录结构：`daily/`、`people/`、`projects/`、`knowledge/`、`context/`
-3. 自定义 SOUL.md（Agent 人格）、USER.md（用户画像）、MEMORY.md（初始实体）
+3. 自定义各模板文件，参考 `examples/` 中的完整示例
 4. 将 AGENTS.md 中的查找协议加入 Agent 的 system prompt
-5. 可选：配置 `scripts/auto-backup.sh` 和 `scripts/token-tracker.js`（需先编辑路径和 job ID）
-6. 参考 `examples/` 中的完整示例
+5. 可选：配置备份脚本和 token 追踪（需先编辑路径和 job ID）
 
 ## 适用场景
 
 - 使用 OpenClaw、Claude Code、Codex 等平台运行长期 AI Agent
+- 一个人或小团队与 Agent 长期协作，实体规模在几十到几百
 - 需要 Agent 跨 session 记住用户偏好、项目状态、技术决策
 - 希望记忆系统透明可控，而非平台黑盒
 - 重视数据主权，不想被锁定在某个平台
@@ -153,6 +252,7 @@ memory/ (深度存储, 无限扩展)    <- 覆盖剩余 10% + 完整历史
 - 透明可追溯。不信任黑盒，所有自动化必须有输出报告。
 - 数据主权。本地文件，Git 备份，不锁定平台。
 - 深度大于广度。一篇深度分析胜过十条浅层摘要。
+- 确定性优先。可预测的行为比灵活的自主性更适合生产环境。
 
 ## 项目背景
 
@@ -174,13 +274,14 @@ A battle-tested memory system for AI agents that need to remember across session
 
 Two-layer file-based architecture: a hot cache (MEMORY.md, ~50 lines) for instant context loading, and deep storage (memory/) for everything else. Plain Markdown + JSON, no database, fully Git-friendly.
 
-Key features:
-- Tiered lookup protocol (deterministic + semantic search)
-- Supersede mechanism for fact evolution tracking (never delete, always trace)
-- Clerk model for knowledge capture (separate review process, human-in-the-loop)
-- Execution transparency (structured logs, instant push, dashboards)
-- Zero infrastructure dependencies (files only, no vector DB)
+Key differentiators vs. existing solutions:
+- vs. CLAUDE.md (single file): Solves file bloat with two-layer separation, adds structured lookup protocol and fact evolution tracking
+- vs. Mem0 (vector DB): Fully transparent (every memory is a readable file), zero runtime cost, no platform lock-in
+- vs. Zep (knowledge graph): Supersede mechanism provides fact evolution tracking without graph database infrastructure
+- vs. Letta/MemGPT (virtual memory): Deterministic lookup over autonomous management -- predictability matters in production
+
+Best suited for: individual or small-team long-running agents with <500 entities, where transparency, data sovereignty, and zero infrastructure are priorities.
 
 See [docs/00-getting-started.md](docs/00-getting-started.md) to get started. Browse `examples/` for fully populated sample files.
 
-Developed and validated on [OpenClaw](https://github.com/openclaw/openclaw), but the architecture is platform-agnostic — it works with any agent platform that supports file read/write.
+Developed and validated on [OpenClaw](https://github.com/openclaw/openclaw), but the architecture is platform-agnostic.
